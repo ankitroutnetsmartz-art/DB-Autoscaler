@@ -22,14 +22,15 @@ services:
       - "5000:5000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # REMOVED the ./backend:/app mount to prevent host-path overriding
-      - .:/host_root  # Mount project root here so scripts can find compose files
+      - .:/host_root  # Crucial for backend to access docker-compose.yml for scaling
     environment:
       - DB_HOST_PRIMARY=primary-db
       - DB_HOST_REPLICA=replica-db
       - DB_USER=root
       - DB_PASSWORD=production_secure_password
       - DB_NAME=app_db
+      - DOCKER_API_VERSION=1.44  # Resolves the 'client version is too old' error
+      - COMPOSE_PROJECT_NAME=autoscale-3tier-app
     networks:
       - app-network
     depends_on:
@@ -39,30 +40,32 @@ services:
   primary-db:
     image: mysql:8.0
     container_name: primary-db
-    command: --server-id=1 --log-bin=mysql-bin --binlog-format=ROW --gtid_mode=ON --enforce-gtid-consistency=ON --max-connections=500
+    command: --server-id=1 --log-bin=mysql-bin --binlog-format=ROW
     environment:
       - MYSQL_ROOT_PASSWORD=production_secure_password
       - MYSQL_DATABASE=app_db
-    volumes:
-      - ./db-config/init-primary.sql:/docker-entrypoint-initdb.d/init.sql
-      - ./db-config/primary.cnf:/etc/mysql/conf.d/primary.cnf
     ports:
       - "3306:3306"
     networks:
       - app-network
+    volumes:
+      - ./db-config/init-primary.sql:/docker-entrypoint-initdb.d/init-primary.sql:ro
+      - ./db-config/primary.cnf:/etc/mysql/conf.d/primary.cnf:ro
+      - ./db-config:/docker-entrypoint-initdb.d:ro
 
   replica-db:
     image: mysql:8.0
-    command: --log-bin=mysql-bin --read-only=1 --gtid_mode=ON --enforce-gtid-consistency=ON --max-connections=500
+    # Standard Compose scaling handles unique IDs; removed Swarm syntax
+    command: --log-bin=mysql-bin --read-only=1
     environment:
       - MYSQL_ROOT_PASSWORD=production_secure_password
       - MYSQL_DATABASE=app_db
-    volumes:
-      - ./db-config/replica.cnf:/etc/mysql/conf.d/replica.cnf
     networks:
       - app-network
     depends_on:
       - primary-db
+    volumes:
+      - ./db-config/replica.cnf:/etc/mysql/conf.d/replica.cnf:ro
 
   # --- Load Testing (Locust) ---
   locust:
@@ -71,24 +74,8 @@ services:
     ports:
       - "8089:8089"
     volumes:
-      - ./locustfile.py:/home/locust/locustfile.py
-    command: -f /home/locust/locustfile.py --host http://app-backend:5000
-    networks:
-      - app-network
-
-  # --- Autoscaling Engine ---
-  autoscale-engine:
-    build:
-      context: ./backend  # Reuse backend image as it has docker/compose tools
-    container_name: autoscale-engine
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - .:/host_root
-    working_dir: /host_root
-    command: ./autoscale_engine.sh
-    depends_on:
-      - primary-db
-      - replica-db
+      - ./locust:/mnt/locust
+    command: -f /mnt/locust/locustfile.py --host http://app-backend:5000
     networks:
       - app-network
 

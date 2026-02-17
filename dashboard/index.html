@@ -1,619 +1,147 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud-Ops | Advanced Cluster Console</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-        rel="stylesheet">
+    <title>Cloud-Ops Alpha | 3-Tier Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root {
-            --bg: #030712;
-            --glass: rgba(17, 24, 39, 0.75);
-            --border: rgba(255, 255, 255, 0.1);
-            --primary: #38bdf8;
-            --secondary: #818cf8;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --text-main: #f9fafb;
-            --text-dim: #9ca3af;
-        }
-
-        * {
-            box-sizing: border-box;
-            transition: all 0.2s ease-out;
-        }
-
-        body {
-            font-family: 'Outfit', sans-serif;
-            background: radial-gradient(circle at top right, #1e1b4b, var(--bg));
-            color: var(--text-main);
-            margin: 0;
-            padding: 20px;
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 10px;
-        }
-
-        .layout {
-            display: grid;
-            grid-template-columns: 320px 1fr;
-            gap: 24px;
-            max-width: 1600px;
-            margin: 0 auto;
-        }
-
-        /* Sidebar / Controls */
-        .sidebar {
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-        }
-
-        .header {
-            background: var(--glass);
-            backdrop-filter: blur(12px);
-            padding: 20px;
-            border-radius: 20px;
-            border: 1px solid var(--border);
-            text-align: center;
-        }
-
-        .logo {
-            font-size: 1.25rem;
-            font-weight: 700;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .control-panel {
-            background: var(--glass);
-            backdrop-filter: blur(12px);
-            padding: 24px;
-            border-radius: 24px;
-            border: 1px solid var(--border);
-        }
-
-        .control-panel h3 {
-            margin: 0 0 16px 0;
-            font-size: 0.875rem;
-            color: var(--text-dim);
-            text-transform: uppercase;
-        }
-
-        .btn-group {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-        }
-
-        .control-btn {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--border);
-            color: white;
-            padding: 12px;
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-        .control-btn:hover {
-            background: var(--primary);
-            border-color: var(--primary);
-            transform: translateY(-2px);
-        }
-
-        .control-btn.active {
-            background: var(--primary);
-            border-color: var(--primary);
-            box-shadow: 0 0 15px var(--primary);
-        }
-
-        /* Main Content */
-        .main {
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-        }
-
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-        }
-
-        .stat-card {
-            background: var(--glass);
-            padding: 20px;
-            border-radius: 20px;
-            border: 1px solid var(--border);
-            border-left: 4px solid var(--primary);
-        }
-
-        .stat-card .label {
-            font-size: 0.75rem;
-            color: var(--text-dim);
-            text-transform: uppercase;
-        }
-
-        .stat-card .val {
-            font-size: 2rem;
-            font-weight: 700;
-            margin-top: 4px;
-        }
-
-        /* Cluster View */
-        .cluster-view {
-            background: var(--glass);
-            padding: 32px;
-            border-radius: 28px;
-            border: 1px solid var(--border);
-            min-height: 300px;
-        }
-
-        .nodes-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            gap: 20px;
-            justify-content: center;
-        }
-
-        .node-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 16px;
-            text-align: center;
-            position: relative;
-        }
-
-        .node-card.primary {
-            border-color: var(--warning);
-            border-width: 2px;
-        }
-
-        .node-card.active-pulse {
-            animation: cardPulse 0.4s ease-out;
-        }
-
-        @keyframes cardPulse {
-            0% {
-                transform: scale(1);
-            }
-
-            50% {
-                transform: scale(1.05);
-            }
-
-            100% {
-                transform: scale(1);
-            }
-        }
-
-        .node-icon {
-            font-size: 1.5rem;
-            margin-bottom: 8px;
-            filter: drop-shadow(0 0 8px currentColor);
-        }
-
-        .node-name {
-            font-size: 0.875rem;
-            font-weight: 600;
-            display: block;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        /* Load Progress Bar */
-        .load-bar-wrap {
-            width: 100%;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 2px;
-            margin-top: 12px;
-            overflow: hidden;
-        }
-
-        .load-fill {
-            height: 100%;
-            width: 0%;
-            background: var(--primary);
-            border-radius: 2px;
-            transition: width 1s linear;
-        }
-
-        /* Console */
-        .console {
-            background: #000;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 16px;
-            font-family: 'JetBrains Mono', monospace;
-            height: 200px;
-            overflow-y: auto;
-            font-size: 0.75rem;
-            color: #10b981;
-        }
-
-        .console-line {
-            margin-bottom: 4px;
-            display: flex;
-            gap: 8px;
-            border-bottom: 1px solid rgba(16, 185, 129, 0.05);
-            padding-bottom: 2px;
-        }
-
-        .console-ts {
-            color: var(--text-dim);
-        }
-
-        /* Audit Table */
-        .audit-section {
-            background: var(--glass);
-            padding: 24px;
-            border-radius: 24px;
-            border: 1px solid var(--border);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th {
-            text-align: left;
-            color: var(--text-dim);
-            font-size: 0.75rem;
-            padding-bottom: 12px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        td {
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            font-size: 0.875rem;
-        }
-
-        /* Toasts */
-        .toast-container {
-            position: fixed;
-            top: 24px;
-            right: 24px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .toast {
-            background: var(--glass);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            padding: 12px 20px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-            animation: slideIn 0.3s ease-out;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-
-        .type-pill {
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            background: rgba(56, 189, 248, 0.1);
-            color: var(--primary);
-        }
+        :root { --bg: #0b0f19; --card: #161b22; --text: #c9d1d9; --primary: #58a6ff; --accent: #7ee787; --warn: #d29922; --danger: #f85149; }
+        body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background: linear-gradient(180deg,#07101a 0%, #0b0f19 100%); color: var(--text); margin: 0; padding: 24px; }
+        .container-custom { max-width: 1200px; margin: 0 auto; }
+        .dashboard-header { display:flex; justify-content:space-between; align-items:center; gap:16px; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 18px; margin-bottom: 28px; }
+        .brand { display:flex; align-items:center; gap:12px; }
+        .brand h1 { margin:0; font-size:1.1rem; letter-spacing:0.6px; font-weight:800; color:#ffffff; }
+        .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 22px; }
+        .stat-card { background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent); padding:18px; border-radius:12px; border: 1px solid rgba(255,255,255,0.04); text-align:center; box-shadow: 0 6px 18px rgba(2,6,23,0.6); }
+        .stat-val { font-size: 2.1rem; font-weight: 800; color: var(--primary); display:block; }
+        .stat-label { font-size: 0.78rem; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; }
+        .main-layout { display:grid; grid-template-columns: 2fr 1fr; gap:18px; }
+        .panel { background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent); border-radius:12px; border:1px solid rgba(255,255,255,0.03); padding:18px; box-shadow: 0 8px 20px rgba(2,6,23,0.6); }
+        table { width:100%; border-collapse: collapse; font-size:0.9rem; }
+        th { text-align:left; color:var(--primary); padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.04); }
+        td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.02); color:#c9d1d9; }
+        .badge { padding:5px 10px; border-radius:999px; font-size:0.75rem; font-weight:700; }
+        .badge-read { background: rgba(88,166,255,0.12); color: var(--primary); }
+        .badge-write { background: rgba(126,231,135,0.12); color: var(--accent); }
+        .ctrl-btn { background: transparent; border: 1px solid var(--primary); color: var(--primary); padding:10px 14px; border-radius:8px; cursor:pointer; transition:all .18s ease; font-weight:700; }
+        .ctrl-btn:hover { background: var(--primary); color: #07101a; transform: translateY(-2px); }
+        .status-msg { margin-top:12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.85rem; }
+        .small-muted { color:#94a3b8; font-size:0.85rem; }
+        @media (max-width: 900px) { .grid { grid-template-columns: repeat(2,1fr); } .main-layout { grid-template-columns: 1fr; } }
+        @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } .stat-val { font-size:1.6rem; } .brand h1 { font-size:0.95rem; } }
     </style>
 </head>
-
 <body>
-    <div class="toast-container" id="toast-container"></div>
-
-    <div class="layout">
-        <div class="sidebar">
-            <div class="header">
-                <div class="logo">CLOUD CONSOLE</div>
-                <div style="font-size: 0.75rem; color: var(--text-dim); margin-top: 4px;">Ops Intelligence v2.0</div>
-            </div>
-
-            <div class="control-panel">
-                <h3>Manual Scaler</h3>
-                <div class="btn-group">
-                    <button class="control-btn" onclick="scaleCluster(1)">1</button>
-                    <button class="control-btn" onclick="scaleCluster(2)">2</button>
-                    <button class="control-btn" onclick="scaleCluster(3)">3</button>
-                    <button class="control-btn" onclick="scaleCluster(4)">4</button>
-                    <button class="control-btn" onclick="scaleCluster(5)">5</button>
-                    <button class="control-btn" onclick="scaleCluster(10)"
-                        style="grid-column: span 3; margin-top: 8px;">MAX (10)</button>
+        <div class="container-custom">
+            <div class="dashboard-header">
+                <div class="brand">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="6" fill="#071827"/><path d="M6 12h12M6 8h12M6 16h12" stroke="#58a6ff" stroke-width="1.4" stroke-linecap="round"/></svg>
+                    <h1>Cloud-Ops — 3‑Tier Monitor</h1>
                 </div>
-                <p style="font-size: 0.7rem; color: var(--text-dim); margin-top: 12px; text-align: center;">Note:
-                    Autoscale-engine may override manual settings if load permits.</p>
-            </div>
-
-            <div class="control-panel" id="hammer-panel" style="border-color: var(--danger)">
-                <h3 style="color: var(--danger)">⚠️ Traffic Hammer</h3>
-                <button class="control-btn" id="hammer-btn" onclick="toggleHammer()"
-                    style="width: 100%; border-color: var(--danger); color: var(--danger);">START HAMMER</button>
-                <p style="font-size: 0.7rem; color: var(--text-dim); margin-top: 12px; text-align: center;">Rapidly
-                    fires concurrent READ/WRITE requests to trigger autoscaling.</p>
-            </div>
-
-            <div class="control-panel">
-                <h3>System Events</h3>
-                <div class="console" id="console">
-                    <div class="console-line">
-                        <span class="console-ts">00:00:00</span>
-                        <span>[CORE] Handshake established.</span>
-                    </div>
+                <div>
+                    <div id="status-indicator" style="color: var(--accent); font-weight:700">● SYSTEM ONLINE</div>
+                    <div class="small-muted" style="text-align:right">Updated: <span id="updated-ts">—</span></div>
                 </div>
             </div>
+
+            <div class="grid">
+        <div class="stat-card"><span class="stat-label">Active Replicas</span><span class="stat-val" id="replica-count">2</span></div>
+        <div class="stat-card"><span class="stat-label">Avg Latency</span><span class="stat-val" id="latency">--</span></div>
+        <div class="stat-card"><span class="stat-label">Total Logs</span><span class="stat-val" id="total-req">0</span></div>
+        <div class="stat-card"><span class="stat-label">Cluster Load</span><span class="stat-val" id="load-pct">0%</span></div>
+    </div>
+        <div class="main-layout">
+        <div class="panel">
+            <h2>Live Distribution Chart</h2>
+            <canvas id="distributionChart" height="120"></canvas>
+            <h2 style="margin-top:30px">Request History</h2>
+            <table>
+                <thead><tr><th>ID</th><th>NODE</th><th>TYPE</th><th>TIME</th></tr></thead>
+                <tbody id="logBody"></tbody>
+            </table>
         </div>
 
-        <div class="main">
-            <div class="stats-row">
-                <div class="stat-card" id="entropy-card">
-                    <div class="label">Cluster Entropy</div>
-                    <div class="val" id="entropy">STABLE</div>
+        <div class="side-controls">
+            <div class="panel" style="border-left: 4px solid var(--warn);">
+                <h2>Manual Scaling</h2>
+                <p style="font-size: 0.8rem; color: #8b949e;">Direct Docker Socket Control</p>
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                    <button onclick="manualScale(2)" class="ctrl-btn">Scale → 2</button>
+                    <button onclick="manualScale(3)" class="ctrl-btn">Scale → 3</button>
+                    <button onclick="manualScale(5)" class="ctrl-btn">Scale → 5</button>
                 </div>
-                <div class="stat-card" style="border-color: var(--secondary)">
-                    <div class="label">Active Replicas</div>
-                    <div class="val" id="replica-count">0</div>
-                </div>
-                <div class="stat-card" style="border-color: var(--success)">
-                    <div class="label">Throughput / s</div>
-                    <div class="val" id="throughput">0.0</div>
-                </div>
-            </div>
-
-            <div class="cluster-view">
-                <div class="nodes-grid" id="nodes-grid">
-                    <div class="node-card primary">
-                        <div class="node-icon" style="color: var(--warning)">📀</div>
-                        <span class="node-name">primary-db</span>
-                        <span style="font-size: 0.65rem; color: var(--warning)">MASTER</span>
-                        <div class="load-bar-wrap">
-                            <div class="load-fill" style="width: 5%"></div>
-                        </div>
-                    </div>
-                    <!-- Replicas injected here -->
-                </div>
-            </div>
-
-            <div class="audit-section">
-                <h3>Live Trace History</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>TRACE_ID</th>
-                            <th>TARGET_NODE</th>
-                            <th>OPERATION</th>
-                            <th>LATENCY</th>
-                            <th>TIME</th>
-                        </tr>
-                    </thead>
-                    <tbody id="auditBody"></tbody>
-                </table>
+                <div id="scale-status" class="status-msg"></div>
             </div>
         </div>
     </div>
+    </div>
 
     <script>
-        let lastId = 0;
-        let activeScale = 1;
-        let previousNodeCount = 0;
-        let hammerActive = false;
-        let hammerInterval = null;
+        const ctx = document.getElementById('distributionChart').getContext('2d');
+        const distributionChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Primary', 'Replica-1', 'Replica-2', 'Replica-3', 'Replica-4', 'Replica-5'],
+                datasets: [{ label: 'Hits', data: [0, 0, 0, 0, 0, 0], backgroundColor: '#58a6ff' }]
+            },
+            options: { scales: { y: { beginAtZero: true, grid: { color: '#30363d' } } }, plugins: { legend: { display: false } } }
+        });
 
-        function logEvent(msg, level = 'INFO') {
-            const con = document.getElementById('console');
-            const row = document.createElement('div');
-            row.className = 'console-line';
-            const ts = new Date().toLocaleTimeString();
-            row.innerHTML = `<span class="console-ts">${ts}</span> <span>[${level}] ${msg}</span>`;
-            con.prepend(row);
-            if (con.children.length > 50) con.lastChild.remove();
-        }
-
-        function showToast(msg, type = 'success') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.style.borderColor = type === 'error' ? 'var(--danger)' : 'var(--success)';
-            toast.innerHTML = `<span>${type === 'error' ? '❌' : '✅'}</span> <span>${msg}</span>`;
-            container.appendChild(toast);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateY(-20px)';
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        }
-
-        async function scaleCluster(val) {
+        async function manualScale(count) {
+            const status = document.getElementById('scale-status');
+            status.style.color = 'var(--warn)';
+            status.innerText = "⏳ Requesting scale to " + count + "...";
             try {
-                logEvent(`Initiating Scale Request: ${val} nodes...`, 'SYSTEM');
                 const res = await fetch('http://localhost:5000/api/scale', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ count: val })
+                    body: JSON.stringify({ count })
                 });
-                if (res.ok) {
-                    showToast(`Scaling cluster to ${val} replicas...`);
-                    logEvent(`Scaling command accepted. Replicas: ${val}`);
-                } else {
-                    throw new Error('API Rejection');
-                }
+                const result = await res.json();
+                status.style.color = 'var(--accent)';
+                status.innerText = "✅ " + result.message;
             } catch (e) {
-                showToast(`Scaling failed: ${e.message}`, 'error');
-                logEvent(`CRITICAL: Scale request failed.`, 'ERROR');
-            }
-        }
-
-        function toggleHammer() {
-            const btn = document.getElementById('hammer-btn');
-            const ent = document.getElementById('entropy');
-            const card = document.getElementById('entropy-card');
-
-            hammerActive = !hammerActive;
-
-            if (hammerActive) {
-                btn.innerText = 'STOP HAMMER';
-                btn.style.background = 'var(--danger)';
-                btn.style.color = 'white';
-                ent.innerText = 'CRITICAL';
-                ent.style.color = 'var(--danger)';
-                card.style.borderColor = 'var(--danger)';
-                logEvent('TRAFFIC_HAMMER: Initializing high-load simulation...', 'CRITICAL');
-                showToast('Traffic Hammer ENABLED', 'error');
-
-                // Rapid fire requests
-                hammerInterval = setInterval(() => {
-                    // Send 5 concurrent requests every 200ms
-                    for (let i = 0; i < 5; i++) {
-                        fetch('http://localhost:5000/api/data'); // Read
-                        if (Math.random() > 0.7) {
-                            fetch('http://localhost:5000/api/data', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ message: "HAMMER_TRIAL" })
-                            }); // Write
-                        }
-                    }
-                }, 200);
-            } else {
-                btn.innerText = 'START HAMMER';
-                btn.style.background = 'transparent';
-                btn.style.color = 'var(--danger)';
-                ent.innerText = 'STABLE';
-                ent.style.color = 'var(--text-main)';
-                card.style.borderColor = 'var(--primary)';
-                clearInterval(hammerInterval);
-                logEvent('TRAFFIC_HAMMER: Simulation terminated.', 'SYSTEM');
-                showToast('Traffic Hammer DISABLED');
+                status.style.color = 'var(--danger)';
+                status.innerText = "❌ Error: " + e.message;
             }
         }
 
         async function refresh() {
+            const start = Date.now();
             try {
-                const [dataRes, logsRes] = await Promise.all([
+                const [dRes, lRes] = await Promise.all([
                     fetch('http://localhost:5000/api/data'),
                     fetch('http://localhost:5000/api/logs')
                 ]);
-                const data = await dataRes.json();
-                const logs = await logsRes.json();
+                const data = await dRes.json();
+                const logs = await lRes.json();
+                
+                document.getElementById('latency').innerText = (Date.now() - start) + 'ms';
+                document.getElementById('replica-count').innerText = data.active_nodes;
+                document.getElementById('total-req').innerText = logs.length;
 
-                // Stats
-                document.getElementById('replica-count').innerText = data.active_nodes || 0;
-
-                // Calculate throughput based on logs in a sliding 10s window (server-time referenced)
-                const serverTime = new Date(logsRes.headers.get('Date')).getTime();
-                const logsInWindow = logs.filter(l => (serverTime - new Date(l.timestamp).getTime()) < 10000);
-
-                let rps = 0;
-                if (logsInWindow.length > 1) {
-                    const latest = new Date(logsInWindow[0].timestamp).getTime();
-                    const oldest = new Date(logsInWindow[logsInWindow.length - 1].timestamp).getTime();
-                    const spanSeconds = (latest - oldest) / 1000;
-                    if (spanSeconds > 0) {
-                        rps = logsInWindow.length / spanSeconds;
-                    } else {
-                        rps = logsInWindow.length;
-                    }
-                } else if (logsInWindow.length === 1) {
-                    rps = 1.0;
-                }
-                document.getElementById('throughput').innerText = rps.toFixed(1);
-
-                // Detect Node Changes
-                const newNodeCount = parseInt(data.active_nodes);
-                if (newNodeCount > previousNodeCount && previousNodeCount !== 0) {
-                    logEvent(`CLUSTER_EXPAND: Added ${newNodeCount - previousNodeCount} worker nodes.`);
-                    showToast(`Scaling up... Detected ${newNodeCount} replicas`);
-                } else if (newNodeCount < previousNodeCount) {
-                    logEvent(`CLUSTER_SHRINK: Removed ${previousNodeCount - newNodeCount} worker nodes.`);
-                    showToast(`Scaling down... Detected ${newNodeCount} replicas`);
-                }
-                previousNodeCount = newNodeCount;
-
-                // Node Grid Update
-                const grid = document.getElementById('nodes-grid');
-                const primary = grid.querySelector('.primary').outerHTML;
-                let replicas = '';
-
-                (data.replicas || []).forEach(r => {
-                    replicas += `
-                        <div class="node-card replica" id="node-${r.name}">
-                            <div class="node-icon" style="color: var(--primary)">💾</div>
-                            <span class="node-name">${r.name}</span>
-                            <span style="font-size: 0.65rem; color: var(--primary)">WORKER</span>
-                            <div class="load-bar-wrap"><div class="load-fill" style="width: ${parseFloat(r.cpu) * 2}%"></div></div>
-                        </div>
-                    `;
+                const counts = [0,0,0,0,0,0];
+                logs.forEach(l => {
+                    if(l.node_used.includes('primary')) counts[0]++;
+                    else if(l.node_used.includes('-1')) counts[1]++;
+                    else if(l.node_used.includes('-2')) counts[2]++;
+                    else if(l.node_used.includes('-3')) counts[3]++;
+                    else if(l.node_used.includes('-4')) counts[4]++;
+                    else if(l.node_used.includes('-5')) counts[5]++;
                 });
-                grid.innerHTML = primary + replicas;
+                distributionChart.data.datasets[0].data = counts;
+                distributionChart.update();
 
-                // Sync Audit Table & Pulse
-                const audit = document.getElementById('auditBody');
-                audit.innerHTML = logs.map(l => {
-                    if (l.id > lastId) {
-                        const targetCard = document.getElementById(`node-replica-db-${l.node_used.slice(-1)}`);
-                        if (targetCard) targetCard.classList.add('active-pulse');
-                        setTimeout(() => targetCard?.classList.remove('active-pulse'), 500);
-                    }
-                    return `
-                        <tr>
-                            <td style="color: var(--text-dim)">TRX_${l.id}</td>
-                            <td><span class="type-pill">${l.node_used}</span></td>
-                            <td><span style="font-weight: 700; color: ${l.request_type === 'READ' ? 'var(--primary)' : 'var(--warning)'}">${l.request_type}</span></td>
-                            <td>${Math.floor(Math.random() * 5 + 1)}ms</td>
-                            <td>${new Date(l.timestamp).toLocaleTimeString()}</td>
-                        </tr>
-                    `;
-                }).join('');
-                if (logs[0]) lastId = logs[0].id;
-
-            } catch (e) {
-                logEvent('API Connectivity issue detected...', 'WARN');
-            }
+                document.getElementById('logBody').innerHTML = logs.slice(0, 10).map(l => `
+                    <tr><td>#${l.id}</td><td>${l.node_used}</td>
+                    <td><span class="badge ${l.request_type === 'READ' ? 'badge-read' : 'badge-write'}">${l.request_type}</span></td>
+                    <td>${new Date(l.timestamp).toLocaleTimeString()}</td></tr>
+                `).join('');
+            } catch (e) { document.getElementById('status-indicator').innerText = '● SYSTEM OFFLINE'; }
         }
-
         setInterval(refresh, 2000);
-        refresh();
     </script>
 </body>
-
 </html>

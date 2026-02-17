@@ -1,5 +1,8 @@
 [mysqld]
 server-id=2
 read_only=1
-gtid_mode=ON
-enforce-gtid-consistency=ON
+gtid_mode=OFF
+enforce-gtid-consistency=OFF
+max_connections=200
+skip-host-cache
+skip-name-resolve

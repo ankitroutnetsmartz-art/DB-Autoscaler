@@ -2,5 +2,8 @@
 server-id=1
 log-bin=mysql-bin
 bind-address=0.0.0.0
-gtid_mode=ON
-enforce-gtid-consistency=ON
+gtid_mode=OFF
+enforce-gtid-consistency=OFF
+max_connections=200
+skip-host-cache
+skip-name-resolve
