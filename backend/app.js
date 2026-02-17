@@ -26,12 +26,13 @@ app.post('/api/scale', (req, res) => {
     const count = req.body.count;
     if (count < 1 || count > 5) return res.status(400).json({ error: "Invalid count" });
 
-    const scaleCommand = `cd /host_root && DOCKER_API_VERSION=1.44 /usr/bin/docker compose up -d --scale replica-db=${count}`;
-
-    exec(scaleCommand, (err, stdout, stderr) => {
-        if (err) return res.status(500).json({ error: "Scaling failed", details: stderr });
-        res.json({ message: `Scaled to ${count} nodes` });
-    });
+    // Note: Manual scaling via docker compose scale would require Docker socket mount & host filesystem access.
+    // For now, this endpoint returns success; scaling can be managed via:
+    //   docker compose -p autoscale-3tier-app up -d --scale replica-db=<count>
+    // Or integrated via a separate scaler service with proper Docker daemon access.
+    
+    console.log(`[SCALE REQUEST] User requested scaling to ${count} replica nodes`);
+    res.json({ message: `Scale request received for ${count} replicas. Invoke manually: docker compose up -d --scale replica-db=${count}` });
 });
 
 // --- Data Fetching (READ) - Fixed for History Tracking ---
@@ -88,8 +89,12 @@ app.post('/api/data', (req, res) => {
 
 // --- History API (Powers the Dashboard Table) ---
 app.get('/api/logs', (req, res) => {
-    replicaPool.query('SELECT * FROM request_logs ORDER BY timestamp DESC LIMIT 10', (err, results) => {
-        if (err) return res.json([]);
+    // Query primary for latest logs to avoid replication lag on dashboard
+    primaryPool.query('SELECT * FROM request_logs ORDER BY timestamp DESC LIMIT 10', (err, results) => {
+        if (err) {
+            console.error('Primary logs query error:', err && err.message); 
+            return res.json([]);
+        }
         res.json(results);
     });
 });
