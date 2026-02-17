@@ -35,6 +35,16 @@ BINLOG_POS=$(echo "$BINLOG_INFO" | grep "Position:" | awk '{print $2}')
 
 echo "   Primary at: $BINLOG_FILE, Position: $BINLOG_POS"
 
+# Ensure a replication user exists that uses mysql_native_password (avoids caching_sha2 issues)
+echo "🔐 Ensuring replication user exists on primary..."
+docker exec primary-db mysql -uroot -pproduction_secure_password -e "\
+    CREATE USER IF NOT EXISTS 'repl'@'%' IDENTIFIED WITH mysql_native_password BY 'production_secure_password'; \
+    GRANT REPLICATION SLAVE ON *.* TO 'repl'@'%'; FLUSH PRIVILEGES;" 2>/dev/null || true
+
+# Get primary IP to avoid name resolution issues inside some networks
+PRIMARY_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' primary-db)
+echo "   Primary IP: $PRIMARY_IP"
+
 # Configure each replica
 docker ps --filter "name=replica-db" --format "{{.Names}}" | while read REPLICA; do
     echo "🔧 Checking readiness of $REPLICA..."
@@ -66,10 +76,12 @@ docker ps --filter "name=replica-db" --format "{{.Names}}" | while read REPLICA;
         RESET MASTER;
         SET GLOBAL server_id=$SERVER_ID;
         CHANGE MASTER TO 
-            MASTER_HOST='primary-db',
-            MASTER_USER='root',
+            MASTER_HOST='${PRIMARY_IP}',
+            MASTER_USER='repl',
             MASTER_PASSWORD='production_secure_password',
-            MASTER_AUTO_POSITION=1;
+            MASTER_LOG_FILE='${BINLOG_FILE}',
+            MASTER_LOG_POS=${BINLOG_POS},
+            MASTER_SSL=0;
         START SLAVE;
     " 2>/dev/null || echo "   ⚠️  $REPLICA configuration issue"
     

@@ -1,8 +1,8 @@
 
-docker compose -p autoscale-3tier-app down -v
+docker compose -p autoscale-3tier-app down -v --remove-orphans
 
 docker compose -p autoscale-3tier-app up -d --build
 
 ./sync_slaves.sh
 
-docker logs -f autoscale-engine
+docker compose logs -f autoscale-engine
