@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS request_logs (
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Configure Replication User (MySQL 8 compatibility)
-ALTER USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY 'production_secure_password';
+-- Configure root to support mysql_native_password for replication
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'production_secure_password';
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' WITH GRANT OPTION;
 FLUSH PRIVILEGES;

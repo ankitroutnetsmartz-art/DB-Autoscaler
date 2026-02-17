@@ -47,16 +47,26 @@ app.get('/api/data', (req, res) => {
                 }
                 primaryPool.query('INSERT INTO request_logs (node_used, request_type) VALUES (?, ?)', ['primary-fallback', 'READ'], (logErr) => {
                     if (logErr) console.error('Primary log insert error:', logErr && logErr.message);
-                    res.json({ source: 'READ-PRIMARY-FALLBACK', data: pResults });
+                    // determine active nodes from request_logs (best-effort)
+                    primaryPool.query("SELECT COUNT(DISTINCT node_used) AS replicas FROM request_logs WHERE node_used LIKE 'replica%'", (cErr, cRes) => {
+                        let replicas = 0;
+                        if (!cErr && cRes && cRes[0] && cRes[0].replicas) replicas = cRes[0].replicas;
+                        const active_nodes = 1 + replicas; // primary + replicas
+                        res.json({ source: 'READ-PRIMARY-FALLBACK', active_nodes, data: pResults });
+                    });
                 });
             });
         }
 
-        // Record the event in the history table
-        primaryPool.query('INSERT INTO request_logs (node_used, request_type) VALUES (?, ?)', 
-            ['replica-pool', 'READ'], (logErr) => {
-                if (logErr) console.error('Primary log insert error:', logErr && logErr.message);
-                res.json({ source: "READ-REPLICA", data: results });
+        // Record the event in the history table and return active_nodes
+        primaryPool.query('INSERT INTO request_logs (node_used, request_type) VALUES (?, ?)', ['replica-pool', 'READ'], (logErr) => {
+            if (logErr) console.error('Primary log insert error:', logErr && logErr.message);
+            primaryPool.query("SELECT COUNT(DISTINCT node_used) AS replicas FROM request_logs WHERE node_used LIKE 'replica%'", (cErr, cRes) => {
+                let replicas = 0;
+                if (!cErr && cRes && cRes[0] && cRes[0].replicas) replicas = cRes[0].replicas;
+                const active_nodes = 1 + replicas;
+                res.json({ source: "READ-REPLICA", active_nodes, data: results });
+            });
         });
     });
 });

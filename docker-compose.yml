@@ -49,9 +49,9 @@ services:
     networks:
       - app-network
     volumes:
-      - ./db-config/init-primary.sql:/docker-entrypoint-initdb.d/init-primary.sql:ro
+      - mysql-primary-data:/var/lib/mysql
+      - ./db-config/init-primary.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - ./db-config/primary.cnf:/etc/mysql/conf.d/primary.cnf:ro
-      - ./db-config:/docker-entrypoint-initdb.d:ro
 
   replica-db:
     image: mysql:8.0
@@ -82,3 +82,6 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  mysql-primary-data:
