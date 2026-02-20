@@ -1,21 +1,28 @@
-FROM node:18
+FROM node:18-alpine
 
-# Install dependencies and the static Docker binary
-RUN apt-get update && apt-get install -y curl && \
-    curl -L https://download.docker.com/linux/static/stable/x86_64/docker-24.0.5.tgz | tar -xz -C /tmp && \
-    mv /tmp/docker/docker /usr/bin/docker && \
-    # Install Docker Compose V2 plugin
-    mkdir -p /usr/local/lib/docker/cli-plugins && \
-    curl -L "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64" -o /usr/local/lib/docker/cli-plugins/docker-compose && \
-    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose && \
-    rm -rf /tmp/docker && \
-    apt-get purge -y curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
-# Add this line after your Docker installation in the Dockerfile
-ENV DOCKER_API_VERSION=1.44
+# Set the GID from your host (125)
+ARG DOCKER_GID=125
+
 WORKDIR /app
+
+# Patch vulnerabilities and install Docker CLI
+RUN apk update && apk upgrade && \
+    apk add --no-cache docker-cli && \
+    addgroup -g ${DOCKER_GID} docker_host && \
+    addgroup node docker_host
+
+# Copy package files from the local directory
 COPY package*.json ./
-RUN npm install
+RUN npm ci --only=production
+
+# Copy the actual backend code
+# Since the Dockerfile is inside the 'backend' folder, '.' refers to 'backend/'
 COPY . .
 
+# Run as non-root
+USER node
+
 EXPOSE 5000
+
+# Fix: Start app.js directly from the current WORKDIR (/app)
 CMD ["node", "app.js"]

@@ -1,83 +1,114 @@
 services:
-  # --- Tier 1: Frontend (Nginx) ---
+  # UI & Load Balancer
   dashboard:
     image: nginx:alpine
     container_name: app-dashboard
     ports:
       - "8081:80"
     volumes:
-      - ./dashboard:/usr/share/nginx/html
+      - ./dashboard:/usr/share/nginx/html:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - app-network
     depends_on:
-      - backend
+      backend:
+        # FIX: Changed from service_healthy to service_started 
+        # because backend healthcheck is disabled.
+        condition: service_started 
 
-  # --- Tier 2: Backend (Node.js) ---
+  # Optimized Node.js Logic Tier
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    container_name: app-backend
+      args:
+        - DOCKER_GID=125
+    image: db-autoscaler-backend:latest
+    user: "1000:125"
     ports:
       - "5000:5000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - .:/host_root  # Crucial for backend to access docker-compose.yml for scaling
     environment:
-      - DB_HOST_PRIMARY=primary-db
-      - DB_HOST_REPLICA=replica-db
+      - NODE_ENV=production
+      - DB_HOST=primary-db
+      - REPLICA_HOST=replica-db
       - DB_USER=root
       - DB_PASSWORD=production_secure_password
       - DB_NAME=app_db
-      - DOCKER_API_VERSION=1.44  # Resolves the 'client version is too old' error
-      - COMPOSE_PROJECT_NAME=autoscale-3tier-app
+      - NODE_OPTIONS=--max-old-space-size=400
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      disable: true # Keep disabled until the backend logic is 100% stable
     networks:
       - app-network
     depends_on:
-      - primary-db
+      primary-db:
+        condition: service_healthy # Reverted to healthy so backend doesn't crash if DB is booting
 
-  # --- Tier 3: Database (MySQL 8.0) ---
+  # Dedicated Bash Scaler
+  scaler:
+    image: alpine:latest
+    container_name: app-scaler
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/app
+    # Critical: Use --remove-orphans in the scale-down logic inside autoscale.sh
+    command: >
+      sh -c "apk add --no-cache docker-cli docker-cli-compose bc mysql-client && 
+             chmod +x /app/autoscale.sh && 
+             sh /app/autoscale.sh"
+    networks:
+      - app-network
+    depends_on:
+      backend:
+        condition: service_started
+
+  # Data Tier - Primary
   primary-db:
     image: mysql:8.0
     container_name: primary-db
-    command: --server-id=1 --log-bin=mysql-bin --binlog-format=ROW
     environment:
       - MYSQL_ROOT_PASSWORD=production_secure_password
       - MYSQL_DATABASE=app_db
-    ports:
-      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pproduction_secure_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - app-network
     volumes:
       - mysql-primary-data:/var/lib/mysql
       - ./db-config/init-primary.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - ./db-config/primary.cnf:/etc/mysql/conf.d/primary.cnf:ro
 
+  # Data Tier - Replica
   replica-db:
     image: mysql:8.0
-    # Standard Compose scaling handles unique IDs; removed Swarm syntax
-    command: --log-bin=mysql-bin --read-only=1
     environment:
       - MYSQL_ROOT_PASSWORD=production_secure_password
       - MYSQL_DATABASE=app_db
     networks:
       - app-network
-    depends_on:
-      - primary-db
     volumes:
-      - ./db-config/replica.cnf:/etc/mysql/conf.d/replica.cnf:ro
+      - ./db-config/init-primary.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
-  # --- Load Testing (Locust) ---
+  # Performance Testing (Containerized Locust)
   locust:
-    image: locustio/locust
+    image: locustio/locust:latest
     container_name: locust-load-test
     ports:
       - "8089:8089"
     volumes:
       - ./locust:/mnt/locust
-    command: -f /mnt/locust/locustfile.py --host http://app-backend:5000
+    command: -f /mnt/locust/locustfile.py --host http://app-dashboard:80
     networks:
       - app-network
+    depends_on:
+      - backend
 
 networks:
   app-network:
