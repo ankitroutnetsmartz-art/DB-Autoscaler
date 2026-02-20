@@ -59,17 +59,19 @@ app.use((req, res, next) => {
 });
 
 // --- MANUAL SCALING ENDPOINT ---
-app.post('/api/scale', (req, res) => {
+app.post('/api/scale', async (req, res) => {
     const { replicas } = req.body;
     if (!replicas || replicas < 1 || replicas > 10) {
         return res.status(400).json({ error: "Invalid count (1-10)" });
     }
 
-    // FIX: Target the 'replica-db' service for scaling, not the 'backend'.
-    exec(`docker compose up -d --scale replica-db=${replicas} --no-recreate`, (error) => {
-        if (error) return res.status(500).json({ error: "Scale failed" });
+    try {
+        // FIX: Target the 'replica-db' service for scaling, not the 'backend'.
+        await execPromise(`docker compose up -d --scale replica-db=${replicas} --no-recreate`);
         res.json({ status: "Success", message: `Scaling to ${replicas} nodes` });
-    });
+    } catch (error) {
+        res.status(500).json({ error: "Scale failed", details: error.message });
+    }
 });
 
 // --- API ENDPOINTS ---
@@ -99,33 +101,47 @@ app.post('/api/data', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+const fs = require('fs');
+
+// Example Topology Data Generator
+const generateTopology = (count) => {
+    const nodes = [{ id: 'Primary', type: 'master', status: 'healthy' }];
+    const links = [];
+
+    for (let i = 1; i < count; i++) {
+        const replicaId = `Replica-${i}`;
+        nodes.push({ id: replicaId, type: 'slave', status: 'healthy' });
+        links.push({ source: 'Primary', target: replicaId });
+    }
+    return { nodes, links };
+};
+
 app.get('/api/stats', async (req, res) => {
-    // We bypass the docker CLI and talk to the Unix Socket directly via curl
-    const countCmd = 'curl --unix-socket /var/run/docker.sock http://localhost/containers/json?filters=%7B%22name%22%3A%5B%22replica-db%22%5D%7D';
-
     try {
-        const [countRes, logsRes] = await Promise.all([
-            execPromise(countCmd),
-            pool.query('SELECT COUNT(*) as count FROM request_logs').catch(() => [[{count: 0}]])
-        ]);
+        // 1. Get Replica Count from your sync file
+        let replicas = 0;
+        if (fs.existsSync('/app/replica_count.txt')) {
+            const countData = fs.readFileSync('/app/replica_count.txt', 'utf8');
+            replicas = parseInt(countData.trim()) || 0;
+        }
 
-        // Parse the JSON array returned by Docker Engine API
-        const containers = JSON.parse(countRes.stdout);
-        const replicas = containers.filter(c => c.State === 'running').length;
-        const totalNodes = replicas + 1; // Primary + Replicas
+        // 2. Query for Stats with NULL protection (COALESCE)
+        const [[{ total_logs }]] = await pool.query('SELECT COALESCE(COUNT(*), 0) as total_logs FROM request_logs');
+        
+        // 3. Query for TPS (Requests in the last 10 seconds)
+        const [[{ tps_count }]] = await pool.query(
+            'SELECT COALESCE(COUNT(*), 0) as tps_count FROM request_logs WHERE timestamp > NOW() - INTERVAL 10 SECOND'
+        );
 
+        // 4. Send clean JSON back to the UI
         res.json({
-            active_replicas: totalNodes,
-            total_logs: logsRes[0][0].count,
-            cluster_load: 0, // Simplified for immediate fix
-            distribution: containers.map(c => ({
-                node: c.Names[0].split('-').pop(),
-                cpu: 0
-            }))
+            active_replicas: replicas + 1,
+            total_logs: total_logs + logBuffer.length,
+            current_tps: (tps_count / 10).toFixed(1) // This removes "undefined%"
         });
     } catch (err) {
-        console.error("DOCKER API ERROR:", err.message);
-        res.json({ active_replicas: 1, error: "API_TIMEOUT" });
+        console.error("Stats Query Failed:", err.message);
+        res.json({ active_replicas: 1, total_logs: 0, current_tps: "0.0" });
     }
 });
 
@@ -143,6 +159,18 @@ app.get('/api/logs', async (req, res) => {
 
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
-app.listen(5000, '0.0.0.0', () => {
+const server = app.listen(5000, '0.0.0.0', () => {
     console.log('Optimized Backend Engine Online | Port 5000 | Batch Logging Active');
 });
+
+// --- GRACEFUL SHUTDOWN ---
+const gracefulShutdown = (signal) => {
+    console.log(`\nReceived ${signal}. Starting graceful shutdown...`);
+    server.close(async () => {
+        await flushLogs();
+        console.log('All connections closed and logs flushed. Exiting.');
+        process.exit(0);
+    });
+};
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
