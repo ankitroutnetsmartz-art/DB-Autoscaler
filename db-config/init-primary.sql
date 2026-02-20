@@ -14,10 +14,12 @@ CREATE TABLE IF NOT EXISTS site_entries (
 INSERT INTO site_entries (title, description) VALUES ('System Initialized', 'Cluster is online.');
 
 -- Create request logs table for auditing
+-- FIX: Columns renamed/added to match app.js INSERT (endpoint, method, node_used)
 CREATE TABLE IF NOT EXISTS request_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    endpoint VARCHAR(255) NOT NULL,
+    method VARCHAR(10) NOT NULL,
     node_used VARCHAR(255) NOT NULL,
-    request_type VARCHAR(50) NOT NULL,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

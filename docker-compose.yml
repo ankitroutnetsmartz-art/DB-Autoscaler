@@ -14,7 +14,7 @@ services:
       backend:
         # FIX: Changed from service_healthy to service_started 
         # because backend healthcheck is disabled.
-        condition: service_started 
+        condition: service_started
 
   # Optimized Node.js Logic Tier
   backend:
@@ -28,6 +28,8 @@ services:
       - "5000:5000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # FIX: Mount project dir so backend can read replica_count.txt written by autoscale.sh
+      - .:/app/project:ro
     environment:
       - NODE_ENV=production
       - DB_HOST=primary-db
@@ -53,9 +55,13 @@ services:
   scaler:
     image: alpine:latest
     container_name: app-scaler
+    # FIX: working_dir so 'docker compose' commands find docker-compose.yml
+    working_dir: /app
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/app
+    environment:
+      - COMPOSE_PROJECT_NAME=db-autoscaler
     # Critical: Use --remove-orphans in the scale-down logic inside autoscale.sh
     command: >
       sh -c "apk add --no-cache docker-cli docker-cli-compose bc mysql-client && 
@@ -75,14 +81,18 @@ services:
       - MYSQL_ROOT_PASSWORD=production_secure_password
       - MYSQL_DATABASE=app_db
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pproduction_secure_password"]
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pproduction_secure_password" ]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 30
+      # FIX: Increased to 120s because MySQL bootstrap is extremely slow here
+      start_period: 120s
     networks:
       - app-network
     volumes:
       - mysql-primary-data:/var/lib/mysql
+      # FIX: Mount primary.cnf so MySQL gets server-id and log-bin for replication
+      - ./db-config/primary.cnf:/etc/mysql/conf.d/primary.cnf:ro
       - ./db-config/init-primary.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
   # Data Tier - Replica
@@ -94,6 +104,9 @@ services:
     networks:
       - app-network
     volumes:
+      - mysql-replica-data:/var/lib/mysql
+      # FIX: Mount replica.cnf so replicas load correct MySQL config (read_only, server-id)
+      - ./db-config/replica.cnf:/etc/mysql/conf.d/replica.cnf:ro
       - ./db-config/init-primary.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
   # Performance Testing (Containerized Locust)
@@ -116,3 +129,4 @@ networks:
 
 volumes:
   mysql-primary-data:
+  mysql-replica-data:

@@ -29,13 +29,13 @@ const replicaPool = mysql.createPool({ ...dbConfig, host: process.env.REPLICA_HO
 // --- OPTIMIZATION 1: LOG BATCHING ---
 // Instead of 100 writes/sec, we do 1 write every 5 seconds.
 let logBuffer = [];
-const FLUSH_INTERVAL = 5000; 
+const FLUSH_INTERVAL = 5000;
 
 const flushLogs = async () => {
     if (logBuffer.length === 0) return;
     const batch = [...logBuffer];
     logBuffer = [];
-    
+
     try {
         // Bulk insert syntax: INSERT INTO table (cols) VALUES (?,?,?), (?,?,?)...
         await pool.query(
@@ -120,14 +120,15 @@ app.get('/api/stats', async (req, res) => {
     try {
         // 1. Get Replica Count from your sync file
         let replicas = 0;
-        if (fs.existsSync('/app/replica_count.txt')) {
-            const countData = fs.readFileSync('/app/replica_count.txt', 'utf8');
+        // FIX: Path updated to match volume mount .:/app/project in docker-compose.yml
+        if (fs.existsSync('/app/project/replica_count.txt')) {
+            const countData = fs.readFileSync('/app/project/replica_count.txt', 'utf8');
             replicas = parseInt(countData.trim()) || 0;
         }
 
         // 2. Query for Stats with NULL protection (COALESCE)
         const [[{ total_logs }]] = await pool.query('SELECT COALESCE(COUNT(*), 0) as total_logs FROM request_logs');
-        
+
         // 3. Query for TPS (Requests in the last 10 seconds)
         const [[{ tps_count }]] = await pool.query(
             'SELECT COALESCE(COUNT(*), 0) as tps_count FROM request_logs WHERE timestamp > NOW() - INTERVAL 10 SECOND'

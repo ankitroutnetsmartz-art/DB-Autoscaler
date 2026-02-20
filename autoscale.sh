@@ -23,13 +23,18 @@ while true; do
         echo "🚀 SCALE UP -> ${NEW_REPLICA_COUNT} replicas"
         docker compose up -d --scale replica-db=${NEW_REPLICA_COUNT} --no-recreate
     
-    # 3. Downscaling Logic (Triggers when load is low AND we have more than MIN_NODES)
+    # 3. Downscaling Logic
     elif [ "$REQ_LOAD" -lt 5 ] && [ "$CPU_LOAD" -lt 20 ] && [ "$TOTAL_NODES" -gt "$MIN_NODES" ]; then
         NEW_REPLICA_COUNT=$((REPLICA_COUNT - 1))
-        echo "📉 SCALE DOWN -> ${NEW_REPLICA_COUNT} replicas"
-        # We use --remove-orphans to ensure Docker cleans up the stopped container
-        docker compose up -d --scale replica-db=${NEW_REPLICA_COUNT} --remove-orphans
+        # FIX: Only run docker command if we are actually at a different count
+        if [ "$REPLICA_COUNT" -ne "$NEW_REPLICA_COUNT" ]; then
+            echo "📉 SCALE DOWN -> ${NEW_REPLICA_COUNT} replicas"
+            docker compose up -d --scale replica-db=${NEW_REPLICA_COUNT} --remove-orphans
+        else
+            echo "ℹ️  System at minimum capacity. No action."
+        fi
     fi
 
-    sleep 5
+    echo "💤 Sleeping 30s..."
+    sleep 30
 done
