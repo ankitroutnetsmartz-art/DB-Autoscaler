@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/bin/sh
+# PORTABLE REPLICA SYNC
 set -e
 
 echo "🔍 Discovering replica containers..."
@@ -13,7 +14,8 @@ echo "📊 Found $REPLICA_COUNT replica(s)"
 
 # Wait for Primary to be ready
 echo "⏳ Waiting for primary-db to be ready..."
-for i in {1..60}; do
+i=1
+while [ $i -le 60 ]; do
     if docker exec primary-db mysqladmin ping -pproduction_secure_password --silent; then
         echo "   ✅ primary-db is ready"
         break
@@ -23,48 +25,49 @@ for i in {1..60}; do
         exit 1
     fi
     sleep 2
+    i=$((i + 1))
 done
 
 # Get primary binlog position
 echo "📌 Getting primary binlog position..."
 BINLOG_INFO=$(docker exec primary-db mysql -uroot -pproduction_secure_password \
-    -e "SHOW MASTER STATUS\G" | grep -E "File:|Position:")
+    -e "SHOW MASTER STATUS\G")
 
 BINLOG_FILE=$(echo "$BINLOG_INFO" | grep "File:" | awk '{print $2}')
 BINLOG_POS=$(echo "$BINLOG_INFO" | grep "Position:" | awk '{print $2}')
 
 echo "   Primary at: $BINLOG_FILE, Position: $BINLOG_POS"
 
-# Ensure a replication user exists that uses mysql_native_password (avoids caching_sha2 issues)
+# Ensure a replication user exists
 echo "🔐 Ensuring replication user exists on primary..."
 docker exec primary-db mysql -uroot -pproduction_secure_password -e "\
     CREATE USER IF NOT EXISTS 'repl'@'%' IDENTIFIED WITH mysql_native_password BY 'production_secure_password'; \
     GRANT REPLICATION SLAVE ON *.* TO 'repl'@'%'; FLUSH PRIVILEGES;" 2>/dev/null || true
 
-# Get primary IP to avoid name resolution issues inside some networks
+# Get primary IP
 PRIMARY_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' primary-db)
 echo "   Primary IP: $PRIMARY_IP"
 
 # Configure each replica
-docker ps --filter "name=replica-db" --format "{{.Names}}" | while read REPLICA; do
+for REPLICA in $(docker ps --filter "name=replica-db" --format "{{.Names}}"); do
     echo "🔧 Checking readiness of $REPLICA..."
     
-    # Wait for MySQL to be ready (up to 60 seconds)
-    for i in {1..60}; do
+    j=1
+    while [ $j -le 60 ]; do
         if docker exec $REPLICA mysqladmin ping -pproduction_secure_password --silent; then
             echo "   ✅ $REPLICA is ready"
             break
         fi
-        if [ $i -eq 30 ]; then
+        if [ $j -eq 60 ]; then
             echo "   ❌ $REPLICA failed to become ready"
             continue 2
         fi
         sleep 1
+        j=$((j + 1))
     done
 
     echo "⚙️  Configuring replication on $REPLICA..."
     
-    # Dynamically assign server-id based on the last octet of the container IP
     REPLICA_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $REPLICA)
     SERVER_ID=$(echo $REPLICA_IP | awk -F. '{print $4 + 100}')
     
@@ -98,4 +101,3 @@ done
 
 echo ""
 echo "🎉 Replication sync complete!"
-echo "💡 Verify with: docker exec <replica-name> mysql -uroot -pproduction_secure_password -e 'SHOW SLAVE STATUS\G'"

@@ -87,6 +87,18 @@
                 <div class="node-dot"></div>
                 <div class="node-dot"></div>
                 <div class="node-dot"></div>
+                <div class="node-dot"></div>
+                <div class="node-dot"></div>
+                <div class="node-dot"></div>
+                <div class="node-dot"></div>
+                <div class="node-dot"></div>
+            </div>
+
+            <div class="btn-group" style="margin-top: 15px;">
+                <button class="scale-btn" onclick="manualScale(1)">Scale → 1 Node</button>
+                <button class="scale-btn" onclick="manualScale(3)">Scale → 3 Nodes</button>
+                <button class="scale-btn" onclick="manualScale(5)">Scale → 5 Nodes</button>
+                <button class="scale-btn" onclick="manualScale(10)">Scale → 10 Nodes</button>
             </div>
 
             <div id="scale-status" style="margin-top: 20px; font-family: 'JetBrains Mono'; font-size: 0.7rem; color: var(--accent);">SYSTEM READY</div>
@@ -162,7 +174,7 @@
 
             // 1. Threshold Pulse Logic (Aggressive 40%)
             const tpsCard = document.getElementById('tps').closest('.stat-card');
-            if (stats.cluster_load > 40) {
+            if (parseFloat(stats.current_tps) > 40) {
                 tpsCard.classList.add('critical-load');
             } else {
                 tpsCard.classList.remove('critical-load');
@@ -182,7 +194,7 @@
             document.getElementById('node-count').innerText = stats.active_replicas;
             document.getElementById('total-logs').innerText = stats.total_logs;
             document.getElementById('updated-ts').innerText = `LAST_SYNC: ${new Date().toLocaleTimeString()}`;
-            document.getElementById('tps').innerText = stats.cluster_load + '%';
+            document.getElementById('tps').innerText = stats.current_tps;
 
             // Chart Update
             if (stats.distribution && stats.distribution.length > 0) {

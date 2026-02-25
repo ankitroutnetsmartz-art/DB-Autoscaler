@@ -1,63 +1,58 @@
-#!/bin/bash
+#!/bin/sh
+# PORTABLE AUDIT SCRIPT
 BOLD='\033[1m'
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo -e "${BOLD}🚀 Starting 3-Tier Architecture Production Audit...${NC}\n"
+echo "🚀 Starting 3-Tier Architecture Production Audit...\n"
 
 # Identify all replicas dynamically
 REPLICAS=$(docker ps --filter "name=replica-db" --format "{{.Names}}")
 
 check_node() {
-    local name=$1
-    echo -n "Checking $name... "
-    if docker exec $name mysqladmin ping -u root -pproduction_secure_password > /dev/null 2>&1; then
-        echo -e "${GREEN}PASSED (Ready)${NC}"
+    node_name=$1
+    printf "Checking $node_name... "
+    if docker exec $node_name mysqladmin ping -u root -pproduction_secure_password > /dev/null 2>&1; then
+        echo "PASSED (Ready)"
         return 0
     else
-        echo -e "${RED}FAILED (Engine Down)${NC}"
+        echo "FAILED (Engine Down)"
         return 1
     fi
 }
 
-# 1. Container Presence
-echo -e "${BOLD}[1/4] Container Lifecycle${NC}"
+echo "[1/4] Container Lifecycle"
 docker compose ps
 
-# 2. Database Health (Dynamic Loop)
-echo -e "\n${BOLD}[2/4] Database Engine Status${NC}"
+echo "\n[2/4] Database Engine Status"
 check_node "primary-db"
 for R in $REPLICAS; do
     check_node "$R"
 done
 
-# 3. Network Discovery
-echo -e "\n${BOLD}[3/4] Internal Network Discovery (Backend -> DBs)${NC}"
+echo "\n[3/4] Internal Network Discovery (Backend -> DBs)"
 for target in primary-db $REPLICAS; do
-    echo -n "Can Backend reach $target? "
-    if docker exec app-backend ping -c 1 $target > /dev/null 2>&1; then
-        echo -e "${GREEN}YES${NC}"
+    printf "Can Backend reach $target? "
+    if docker exec backend ping -c 1 $target > /dev/null 2>&1; then
+        echo "YES"
     else
-        echo -e "${RED}NO (DNS Failure)${NC}"
+        echo "NO (DNS Failure)"
     fi
 done
 
-# 4. Auth & Replication Check
-echo -e "\n${BOLD}[4/4] Production Integrity Check${NC}"
-# Check Auth
+echo "\n[4/4] Production Integrity Check"
 AUTH_METHOD=$(docker exec primary-db mysql -u root -pproduction_secure_password -N -s -e "SELECT plugin FROM mysql.user WHERE user='root' AND host='%' LIMIT 1;" 2>/dev/null)
-echo -e "Primary Auth: ${GREEN}$AUTH_METHOD${NC}"
+echo "Primary Auth: $AUTH_METHOD"
 
-# Check Replication IO on all replicas
 for R in $REPLICAS; do
     IO=$(docker exec $R mysql -u root -pproduction_secure_password -e "SHOW SLAVE STATUS\G" | grep "Slave_IO_Running:" | awk '{print $2}')
-    if [ "$IO" == "Yes" ]; then
-        echo -e "Replication $R: ${GREEN}SYNCED${NC}"
+    if [ "$IO" = "Yes" ]; then
+        echo "Replication $R: SYNCED"
     else
-        echo -e "Replication $R: ${RED}BROKEN/NOT CONFIGURED${NC}"
+        echo "Replication $R: BROKEN/NOT CONFIGURED"
     fi
 done
 
-echo -e "\n${BOLD}Audit Complete.${NC}"
+echo "\nAudit Complete."

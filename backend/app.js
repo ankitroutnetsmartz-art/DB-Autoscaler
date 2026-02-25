@@ -67,7 +67,8 @@ app.post('/api/scale', async (req, res) => {
 
     try {
         // FIX: Target the 'replica-db' service for scaling, not the 'backend'.
-        await execPromise(`docker compose up -d --scale replica-db=${replicas} --no-recreate`);
+        // FIX: Set cwd to the project root so docker compose finds docker-compose.yml.
+        await execPromise(`docker compose up -d --scale replica-db=${replicas} --no-recreate`, { cwd: '/app/project' });
         res.json({ status: "Success", message: `Scaling to ${replicas} nodes` });
     } catch (error) {
         res.status(500).json({ error: "Scale failed", details: error.message });
